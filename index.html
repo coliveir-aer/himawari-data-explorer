@@ -98,7 +98,16 @@
             <input type="range" id="timeDelta" min="1" max="120" value="30" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-lg accent-blue-600">
         </div>
 
-        <button id="findFilesBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition duration-200 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+        <div id="s3QueryPrefixPanel" class="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-inner">
+            <h3 class="text-lg font-semibold text-gray-700 mb-3">Current S3 Query Prefix:</h3>
+            <textarea id="s3QueryPrefixDisplay" class="w-full h-20 p-3 font-mono text-sm border border-gray-300 rounded-lg bg-white resize-y" readonly>Select a satellite, product, date, and time to see the query prefix.</textarea>
+            <button id="copyS3PrefixBtn" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition duration-200 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed mt-4">
+                Copy S3 Prefix to Clipboard
+            </button>
+        </div>
+
+
+        <button id="findFilesBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition duration-200 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mt-6">
             Find Available Files
         </button>
 
@@ -226,7 +235,6 @@
         const fileListContainer = document.getElementById('fileListContainer');
         const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
         const openMyHDF5Btn = document.getElementById('openMyHDF5Btn');
-        // const copyJsonBtn = document.getElementById('copyJsonBtn'); // This old button is removed from HTML
         const selectAllBtn = document.getElementById('selectAllBtn');
         const clearSelectionBtn = document.getElementById('clearSelectionBtn');
         const messageBox = document.getElementById('messageBox');
@@ -235,6 +243,11 @@
         const jsonOutputPanel = document.getElementById('jsonOutputPanel');
         const jsonDisplayArea = document.getElementById('jsonDisplayArea');
         const copyJsonFromPanelBtn = document.getElementById('copyJsonFromPanelBtn');
+
+        // New S3 Query Prefix panel elements
+        const s3QueryPrefixPanel = document.getElementById('s3QueryPrefixPanel');
+        const s3QueryPrefixDisplay = document.getElementById('s3QueryPrefixDisplay');
+        const copyS3PrefixBtn = document.getElementById('copyS3PrefixBtn');
 
 
         // --- UI Initialization ---
@@ -264,6 +277,7 @@
             currentS3BucketName = config.BUCKET_NAME;
             currentSatelliteCode = config.CODE;
             console.log(`S3 configuration updated to: Base URL=${currentS3BaseUrl}, Bucket Name=${currentS3BucketName}, Satellite Code=h${currentSatelliteCode}`);
+            updateS3QueryPrefixDisplay(); // Update prefix when config changes
         }
 
         // Initial update of S3 config
@@ -271,6 +285,10 @@
         
         // Listen for changes in satellite selection to update S3 config
         satelliteSelect.addEventListener('change', updateS3Config);
+        productSelect.addEventListener('change', updateS3QueryPrefixDisplay);
+        obsDateInput.addEventListener('change', updateS3QueryPrefixDisplay);
+        startHourSelect.addEventListener('change', updateS3QueryPrefixDisplay);
+        startMinuteSelect.addEventListener('change', updateS3QueryPrefixDisplay);
 
 
         // Update time delta value display
@@ -405,6 +423,47 @@
             }
         }
 
+        /**
+         * Updates the S3 Query Prefix display panel.
+         */
+        function updateS3QueryPrefixDisplay() {
+            const selectedProductType = productSelect.value;
+            const obsDate = obsDateInput.value;
+            const startHour = startHourSelect.value;
+            const startMinute = startMinuteSelect.value;
+
+            if (!selectedProductType || !obsDate || !startHour || !startMinute) {
+                s3QueryPrefixDisplay.value = "Select a satellite, product, date, and time to see the query prefix.";
+                copyS3PrefixBtn.disabled = true;
+                return;
+            }
+
+            const template = productTemplates[selectedProductType];
+            if (!template) {
+                s3QueryPrefixDisplay.value = "Invalid product type selected.";
+                copyS3PrefixBtn.disabled = true;
+                return;
+            }
+
+            const selectedDateObj = new Date(obsDate);
+            // Use UTC to avoid timezone issues when constructing the reference time for filtering
+            selectedDateObj.setUTCHours(parseInt(startHour, 10), parseInt(startMinute, 10), 0, 0); 
+            
+            const yyyy = selectedDateObj.getUTCFullYear().toString();
+            const mm = pad(selectedDateObj.getUTCMonth() + 1, 2);
+            const dd = pad(selectedDateObj.getUTCDate(), 2);
+            const hhmm = pad(selectedDateObj.getUTCHours(), 2) + pad(selectedDateObj.getUTCMinutes(), 2);
+
+            // Construct the S3 listing prefix for this 10-minute interval and product type
+            // Format: {category}/YYYY/MM/DD/hhmm/SHORT_PRODUCT_CODE
+            const s3KeyPrefix = `${template.category}/${yyyy}/${mm}/${dd}/${hhmm}/${template.listingPartialPrefix}`;
+            s3QueryPrefixDisplay.value = `${currentS3BaseUrl}/${s3KeyPrefix}`;
+            copyS3PrefixBtn.disabled = false;
+        }
+
+        // Initial call to set the prefix display on page load
+        updateS3QueryPrefixDisplay();
+
         // --- Main Logic for Finding and Downloading Files ---
 
         findFilesBtn.addEventListener('click', async () => {
@@ -423,7 +482,7 @@
             openMyHDF5Btn.disabled = true;
             selectAllBtn.disabled = true;
             clearSelectionBtn.disabled = true;
-            jsonOutputPanel.classList.add('hidden'); // Hide JSON panel
+            jsonOutputPanel.classList.add('hidden'); // Hide JSON panel until files are found
             jsonDisplayArea.value = ''; // Clear JSON display
             foundFilesArea.classList.add('hidden');
             showMessage('', 'info'); // Clear any previous message
@@ -523,7 +582,7 @@
                     `;
                 }).join('');
                 
-                // Add listener to checkboxes for enabling/disabling buttons
+                // Add listener to checkboxes for enabling/disabling buttons and updating JSON
                 fileListContainer.querySelectorAll('.file-checkbox').forEach(checkbox => {
                     checkbox.addEventListener('change', updateButtonStates);
                 });
@@ -533,11 +592,13 @@
                 selectAllBtn.disabled = false;
                 clearSelectionBtn.disabled = false;
                 foundFilesArea.classList.remove('hidden');
+                jsonOutputPanel.classList.remove('hidden'); // Show JSON panel here
                 showMessage(`Found ${uniqueFilteredKeys.length} matching files. Select to download or view.`, "success");
             } else {
                 console.log("No files found after filtering.");
                 fileListContainer.innerHTML = '<p class="text-gray-500 text-sm">No files found for selected criteria within the time window. Try a different date/time or expand the time window.</p>';
                 foundFilesArea.classList.remove('hidden');
+                jsonOutputPanel.classList.add('hidden'); // Keep JSON panel hidden if no files
                 showMessage("No files found.", "info");
             }
             findFilesBtn.disabled = false; // Re-enable button
@@ -576,14 +637,22 @@
 
             // Handle JSON output panel visibility and content
             if (numSelected > 0) {
-                jsonOutputPanel.classList.remove('hidden');
+                jsonOutputPanel.classList.remove('hidden'); // Keep panel visible if files are found AND selected
                 const selectedKeys = Array.from(selectedCheckboxes).map(checkbox => checkbox.value);
                 jsonDisplayArea.value = generateJsonForSelectedFiles(selectedKeys);
                 copyJsonFromPanelBtn.disabled = false;
             } else {
-                jsonOutputPanel.classList.add('hidden');
-                jsonDisplayArea.value = '';
-                copyJsonFromPanelBtn.disabled = true;
+                // If files were found but none are currently selected, keep JSON panel hidden
+                if (totalFiles > 0) {
+                    jsonOutputPanel.classList.add('hidden'); 
+                    jsonDisplayArea.value = '';
+                    copyJsonFromPanelBtn.disabled = true;
+                } else {
+                    // No files found, so panel is already hidden
+                    jsonOutputPanel.classList.add('hidden'); 
+                    jsonDisplayArea.value = '';
+                    copyJsonFromPanelBtn.disabled = true;
+                }
             }
         }
 
@@ -701,6 +770,27 @@
             } catch (err) {
                 console.error('Failed to copy JSON to clipboard: ', err);
                 showMessage('Failed to copy JSON. Your browser might not support clipboard API.', 'error');
+            }
+        });
+
+        // Event listener for the "Copy S3 Prefix to Clipboard" button
+        copyS3PrefixBtn.addEventListener('click', async () => {
+            console.log("--- Copy S3 Prefix to Clipboard button clicked ---");
+            const s3PrefixText = s3QueryPrefixDisplay.value;
+
+            if (!s3PrefixText || s3PrefixText === "Select a satellite, product, date, and time to see the query prefix.") {
+                console.warn("S3 Prefix display area is empty or default. Nothing to copy.");
+                showMessage("No S3 prefix to copy. Make your selections first.", "info");
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(s3PrefixText);
+                showMessage('S3 Prefix copied to clipboard!', 'success');
+                console.log('S3 Prefix copied successfully.');
+            } catch (err) {
+                console.error('Failed to copy S3 prefix to clipboard: ', err);
+                showMessage('Failed to copy S3 prefix. Your browser might not support clipboard API.', 'error');
             }
         });
 
