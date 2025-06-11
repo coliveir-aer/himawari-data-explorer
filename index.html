@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Himawari Data Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the date input to ensure consistent appearance */
+        input[type="date"] {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-color: white;
+            border: 1px solid #d1d5db; /* Tailwind gray-300 */
+            border-radius: 0.5rem; /* Tailwind rounded-lg */
+            padding: 0.75rem 1rem; /* Tailwind p-3 px-4 */
+            font-size: 1rem; /* Tailwind text-base */
+            line-height: 1.5;
+            color: #1f2937; /* Tailwind gray-900 */
+            cursor: pointer;
+            outline: none;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* Tailwind shadow-sm */
+        }
+        input[type="date"]:focus {
+            border-color: #3b82f6; /* Tailwind blue-500 */
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5); /* Tailwind ring-blue-500/50 */
+        }
+        /* Style for date picker icon */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(0.5); /* Adjust icon color if needed */
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex items-center justify-center p-4 font-sans text-gray-800">
+    <div class="bg-white rounded-xl shadow-2xl p-6 md:p-8 lg:p-10 w-full max-w-2xl border border-blue-200">
+        <h1 class="text-3xl md:text-4xl font-extrabold text-center text-blue-800 mb-6">Himawari Data Explorer</h1>
+        <p class="text-center text-gray-600 mb-8">Select a Himawari Level 2 product and time range to discover and download data files from the NOAA S3 bucket.</p>
+
+        <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6" role="alert">
+            <p class="font-bold">Important Note on File Sizes:</p>
+            <p class="text-sm">Himawari data files can be **100 MB or larger**. Downloading or viewing these files in `myhdf5.hdfgroup.org` will require the entire file to download first, which may take a **significant amount of time** depending on your internet connection. Please be patient.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div>
+                <label for="satelliteSelect" class="block text-sm font-medium text-gray-700 mb-2">Select Himawari Satellite:</label>
+                <select id="satelliteSelect" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out">
+                    <option value="Himawari-9">Himawari-9</option>
+                    <option value="Himawari-8">Himawari-8</option>
+                </select>
+            </div>
+            <div>
+                <label for="productSelect" class="block text-sm font-medium text-gray-700 mb-2">Select Product Type:</label>
+                <select id="productSelect" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out">
+                    <option value="" disabled>Choose a product</option>
+                    <option value="Cloud Mask (AHI-CMSK)">Cloud Mask (AHI-CMSK)</option>
+                    <option value="Cloud Height (AHI-CHGT)">Cloud Height (AHI-CHGT)</option>
+                    <option value="Cloud Phase (AHI-CPHS)">Cloud Phase (AHI-CPHS)</option>
+                    <option value="Winds (NDMW-AHI-C03CT)">Winds (NDMW-AHI-C03CT)</option>
+                    <option value="Winds (NDMW-AHI-C08CS)">Winds (NDMW-AHI-C08CS)</option>
+                    <option value="Winds (NDMW-AHI-C10CS)">Winds (NDMW-AHI-C10CS)</option>
+                    <option value="Winds (NDMW-AHI-C14CT)">Winds (NDMW-AHI-C14CT)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div>
+                <label for="obsDate" class="block text-sm font-medium text-gray-700 mb-2">Observation Date:</label>
+                <input type="date" id="obsDate" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out">
+            </div>
+            <div>
+                <label for="startHour" class="block text-sm font-medium text-gray-700 mb-2">Start Hour:</label>
+                <select id="startHour" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out">
+                    </select>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div>
+                <label for="startMinute" class="block text-sm font-medium text-gray-700 mb-2">Start Minute (10-min increments):</label>
+                <select id="startMinute" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out">
+                    <option value="00">00</option>
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="30">30</option>
+                    <option value="40">40</option>
+                    <option value="50">50</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="mb-8">
+            <label for="timeDelta" class="block text-sm font-medium text-gray-700 mb-2">
+                Time Window: <span id="timeDeltaValue" class="font-semibold text-blue-700">30 minutes</span> before/after selected time
+            </label>
+            <input type="range" id="timeDelta" min="1" max="120" value="30" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-lg accent-blue-600">
+        </div>
+
+        <button id="findFilesBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition duration-200 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+            Find Available Files
+        </button>
+
+        <div id="foundFilesArea" class="mt-8 p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-inner hidden">
+            <h3 class="text-lg font-semibold text-gray-700 mb-3">Available Files:</h3>
+            <div id="fileListContainer" class="max-h-60 overflow-y-auto space-y-2 mb-4">
+                <p class="text-gray-500 text-sm">No files found for selected criteria.</p>
+            </div>
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mt-4 mb-4">
+                <button id="selectAllBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Select All
+                </button>
+                <button id="clearSelectionBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Clear Selection
+                </button>
+            </div>
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
+                <button id="downloadSelectedBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition duration-200 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex-grow">
+                    Download Selected Files
+                </button>
+                <button id="openMyHDF5Btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition duration-200 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex-grow">
+                    Open in myhdf5.hdfgroup.org (Direct View)
+                </button>
+                 </div>
+        </div>
+
+        <div id="jsonOutputPanel" class="mt-8 p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-inner hidden">
+            <h3 class="text-lg font-semibold text-gray-700 mb-3">Selected Files JSON:</h3>
+            <textarea id="jsonDisplayArea" class="w-full h-40 p-3 mb-4 font-mono text-sm border border-gray-300 rounded-lg bg-white resize-y" readonly></textarea>
+            <button id="copyJsonFromPanelBtn" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition duration-200 ease-in-out transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                Copy JSON to Clipboard
+            </button>
+        </div>
+
+        <div id="messageBox" class="mt-4 p-4 text-sm rounded-lg transition duration-300 ease-in-out opacity-0 hidden" role="alert"></div>
+
+        <div class="mt-8 text-center text-gray-500 text-xs">
+            <p>Himawari data is provided by NOAA and JMA. Please attribute both NOAA and JMA when using this data.</p>
+        </div>
+    </div>
+
+    <script>
+        // Mapping of product display names to their S3 category and filename prefix.
+        const productTemplates = {
+            // Himawari-9 Product Templates (original)
+            "Cloud Mask (AHI-CMSK)": {
+                category: "AHI-L2-FLDK-Clouds",
+                filenameFullPrefix: "AHI-CMSK_v1r1_h{satellite_code}_s", // {satellite_code} will be h08 or h09
+                listingPartialPrefix: "AHI-CMSK",
+                timestampRegex: /_s(\d{15})_e(\d{15})_c(\d{15})\.nc$/,
+                baseFilenameIdentifier: "AHI-CMSK_v1r1_h" // Base for both h08/h09
+            },
+            "Cloud Height (AHI-CHGT)": {
+                category: "AHI-L2-FLDK-Clouds",
+                filenameFullPrefix: "AHI-CHGT_v1r1_h{satellite_code}_s",
+                listingPartialPrefix: "AHI-CHGT",
+                timestampRegex: /_s(\d{15})_e(\d{15})_c(\d{15})\.nc$/,
+                baseFilenameIdentifier: "AHI-CHGT_v1r1_h"
+            },
+            "Cloud Phase (AHI-CPHS)": {
+                category: "AHI-L2-FLDK-Clouds",
+                filenameFullPrefix: "AHI-CPHS_v1r1_h{satellite_code}_s",
+                listingPartialPrefix: "AHI-CPHS",
+                timestampRegex: /_s(\d{15})_e(\d{15})_c(\d{15})\.nc$/,
+                baseFilenameIdentifier: "AHI-CPHS_v1r1_h"
+            },
+            "Winds (NDMW-AHI-C03CT)": {
+                category: "AHI-L2-FLDK-Winds",
+                filenameFullPrefix: "NDMW-AHI-C03CT_v1r2_h{satellite_code}_s",
+                listingPartialPrefix: "NDMW-AHI-C03CT",
+                timestampRegex: /_s(\d{15})_e(\d{15})_c(\d{15})\.nc$/,
+                baseFilenameIdentifier: "NDMW-AHI-C03CT_v1r2_h"
+            },
+            "Winds (NDMW-AHI-C08CS)": {
+                category: "AHI-L2-FLDK-Winds",
+                filenameFullPrefix: "NDMW-AHI-C08CS_v1r2_h{satellite_code}_s",
+                listingPartialPrefix: "NDMW-AHI-C08CS",
+                timestampRegex: /_s(\d{15})_e(\d{15})_c(\d{15})\.nc$/,
+                baseFilenameIdentifier: "NDMW-AHI-C08CS_v1r2_h"
+            },
+            "Winds (NDMW-AHI-C10CS)": {
+                category: "AHI-L2-FLDK-Winds",
+                filenameFullPrefix: "NDMW-AHI-C10CS_v1r2_h{satellite_code}_s",
+                listingPartialPrefix: "NDMW-AHI-C10CS",
+                timestampRegex: /_s(\d{15})_e(\d{15})_c(\d{15})\.nc$/,
+                baseFilenameIdentifier: "NDMW-AHI-C10CS_v1r2_h"
+            },
+            "Winds (NDMW-AHI-C14CT)": {
+                category: "AHI-L2-FLDK-Winds",
+                filenameFullPrefix: "NDMW-AHI-C14CT_v1r2_h{satellite_code}_s",
+                listingPartialPrefix: "NDMW-AHI-C14CT",
+                timestampRegex: /_s(\d{15})_e(\d{15})_c(\d{15})\.nc$/,
+                baseFilenameIdentifier: "NDMW-AHI-C14CT_v1r2_h"
+            }
+        };
+
+        // Base S3 URLs and bucket names, to be dynamically selected
+        const S3_CONFIG = {
+            "Himawari-9": {
+                BASE_URL: "https://noaa-himawari9.s3.us-east-1.amazonaws.com",
+                BUCKET_NAME: "noaa-himawari9",
+                CODE: "09" // Used for filename identifiers like h09
+            },
+            "Himawari-8": {
+                BASE_URL: "https://noaa-himawari8.s3.us-east-1.amazonaws.com",
+                BUCKET_NAME: "noaa-himawari8",
+                CODE: "08" // Used for filename identifiers like h08
+            }
+        };
+        
+        let currentS3BaseUrl;
+        let currentS3BucketName;
+        let currentSatelliteCode; // e.g., "09" or "08"
+
+        // Get DOM elements
+        const satelliteSelect = document.getElementById('satelliteSelect'); // New satellite selection
+        const productSelect = document.getElementById('productSelect');
+        const obsDateInput = document.getElementById('obsDate');
+        const startHourSelect = document.getElementById('startHour');
+        const startMinuteSelect = document.getElementById('startMinute');
+        const timeDeltaSlider = document.getElementById('timeDelta');
+        const timeDeltaValueSpan = document.getElementById('timeDeltaValue');
+        const findFilesBtn = document.getElementById('findFilesBtn');
+        const foundFilesArea = document.getElementById('foundFilesArea');
+        const fileListContainer = document.getElementById('fileListContainer');
+        const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
+        const openMyHDF5Btn = document.getElementById('openMyHDF5Btn');
+        // const copyJsonBtn = document.getElementById('copyJsonBtn'); // This old button is removed from HTML
+        const selectAllBtn = document.getElementById('selectAllBtn');
+        const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+        const messageBox = document.getElementById('messageBox');
+
+        // New JSON display panel elements
+        const jsonOutputPanel = document.getElementById('jsonOutputPanel');
+        const jsonDisplayArea = document.getElementById('jsonDisplayArea');
+        const copyJsonFromPanelBtn = document.getElementById('copyJsonFromPanelBtn');
+
+
+        // --- UI Initialization ---
+
+        // Populate Start Hour dropdown
+        console.log("Initializing Start Hour dropdown.");
+        for (let i = 0; i < 24; i++) {
+            const option = document.createElement('option');
+            option.value = String(i).padStart(2, '0');
+            option.textContent = String(i).padStart(2, '0');
+            startHourSelect.appendChild(option);
+        }
+
+        // Set default date to today
+        console.log("Setting default observation date to today.");
+        obsDateInput.valueAsDate = new Date();
+
+        // Set default product type to Cloud Height (AHI-CHGT)
+        console.log("Setting default product type to Cloud Height (AHI-CHGT).");
+        productSelect.value = "Cloud Height (AHI-CHGT)";
+
+        // Set initial S3 configuration based on default satellite selection
+        function updateS3Config() {
+            const selectedSatellite = satelliteSelect.value;
+            const config = S3_CONFIG[selectedSatellite];
+            currentS3BaseUrl = config.BASE_URL;
+            currentS3BucketName = config.BUCKET_NAME;
+            currentSatelliteCode = config.CODE;
+            console.log(`S3 configuration updated to: Base URL=${currentS3BaseUrl}, Bucket Name=${currentS3BucketName}, Satellite Code=h${currentSatelliteCode}`);
+        }
+
+        // Initial update of S3 config
+        updateS3Config(); 
+        
+        // Listen for changes in satellite selection to update S3 config
+        satelliteSelect.addEventListener('change', updateS3Config);
+
+
+        // Update time delta value display
+        console.log("Setting up time delta slider listener.");
+        timeDeltaSlider.addEventListener('input', () => {
+            timeDeltaValueSpan.textContent = `${timeDeltaSlider.value} minutes`;
+            console.log(`Time Delta slider moved to: ${timeDeltaSlider.value} minutes.`);
+        });
+
+        // --- Utility Functions ---
+
+        /**
+         * Displays a message in the message box.
+         * @param {string} message The message to display.
+         * @param {string} type The type of message ('success', 'error', 'info').
+         */
+        function showMessage(message, type) {
+            console.log(`Displaying message (${type}): ${message}`);
+            messageBox.textContent = message;
+            messageBox.className = `mt-4 p-4 text-sm rounded-lg transition duration-300 ease-in-out opacity-100 ${type === 'error' ? 'bg-red-100 text-red-700' : type === 'success' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`;
+            messageBox.classList.remove('hidden');
+            // Using setTimeout to make the message disappear after a few seconds
+            setTimeout(() => {
+                messageBox.classList.add('opacity-0');
+            }, 5000);
+        }
+
+        /**
+         * Pads a number with leading zeros to a specified length.
+         * @param {number} num The number to pad.
+         * @param {number} length The desired length.
+         * @returns {string} The padded string.
+         */
+        function pad(num, length) {
+            return String(num).padStart(length, '0');
+        }
+
+        /**
+         * Converts a 15-digit Himawari timestamp string to a Date object.
+         * @param {string} timestamp The 15-digit timestamp string (YYYYMMDDHHMMSSsss).
+         * @returns {Date|null} The Date object or null if parsing fails.
+         */
+        function parseHimawariTimestamp(timestamp) {
+            console.log(`Attempting to parse timestamp: ${timestamp}`);
+            if (timestamp.length !== 15) {
+                console.error(`Invalid timestamp length: ${timestamp.length}. Expected 15.`);
+                return null;
+            }
+            const year = parseInt(timestamp.substring(0, 4), 10);
+            const month = parseInt(timestamp.substring(4, 6), 10) - 1; // Month is 0-indexed
+            const day = parseInt(timestamp.substring(6, 8), 10);
+            const hour = parseInt(timestamp.substring(8, 10), 10);
+            const minute = parseInt(timestamp.substring(10, 12), 10);
+            const second = parseInt(timestamp.substring(12, 14), 10);
+            const millisecond = parseInt(timestamp.substring(14, 15) + '00', 10); // Take first digit for millisecond and pad
+            
+            const date = new Date(Date.UTC(year, month, day, hour, minute, second, millisecond));
+            if (isNaN(date.getTime())) {
+                console.error(`Failed to create Date object from timestamp: ${timestamp}`);
+                return null;
+            }
+            console.log(`Parsed timestamp ${timestamp} to Date: ${date.toISOString()}`);
+            return date;
+        }
+
+        /**
+         * Lists objects at a given S3 prefix by performing a client-side ListObjectsV2 request.
+         * Handles pagination to retrieve all keys under the prefix.
+         * Uses the currently selected S3_BASE_URL.
+         * @param {string} s3KeyPrefix The S3 key prefix (folder path) to list (e.g., "AHI-L2-FLDK-Clouds/2025/06/08/0110/AHI-CHGT").
+         * @returns {Promise<Array<string>>} A promise that resolves to an array of object keys (full filenames), or an empty array if an error occurs.
+         */
+        async function listObjectsAtPrefix(s3KeyPrefix) {
+            console.log(`Starting S3 listing for prefix: ${s3KeyPrefix} from base URL: ${currentS3BaseUrl}`);
+            let allKeys = [];
+            let continuationToken = undefined;
+            let isTruncated = true;
+
+            try {
+                while (isTruncated) {
+                    let url = `${currentS3BaseUrl}/?list-type=2&prefix=${encodeURIComponent(s3KeyPrefix)}`;
+                    if (continuationToken) {
+                        url += `&continuation-token=${encodeURIComponent(continuationToken)}`;
+                    }
+                    console.log(`  Fetching S3 List URL: ${url}`);
+
+                    const response = await fetch(url);
+                    console.log(`  S3 ListObjectsV2 response status: ${response.status}`);
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error(`S3 ListObjectsV2 HTTP error! Status: ${response.status}, Body: ${errorText}`);
+                        showMessage(`Error listing S3 objects (HTTP ${response.status}). Check console for details.`, 'error');
+                        return [];
+                    }
+
+                    const responseText = await response.text();
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(responseText, "application/xml");
+
+                    const errorNode = xmlDoc.querySelector('Error');
+                    if (errorNode) {
+                        const errorCode = errorNode.querySelector('Code')?.textContent;
+                        const errorMessage = errorNode.querySelector('Message')?.textContent;
+                        console.error(`S3 API Error during ListObjectsV2: ${errorCode} - ${errorMessage}`);
+                        showMessage(`S3 API Error: ${errorCode} - ${errorMessage}`, 'error');
+                        return [];
+                    }
+
+                    const contents = xmlDoc.querySelectorAll('Contents');
+                    console.log(`  Found ${contents.length} 'Contents' nodes in XML for current page.`);
+                    contents.forEach(item => {
+                        const key = item.querySelector('Key')?.textContent;
+                        if (key) {
+                            allKeys.push(key);
+                        }
+                    });
+
+                    const isTruncatedNode = xmlDoc.querySelector('IsTruncated');
+                    isTruncated = isTruncatedNode && isTruncatedNode.textContent === 'true';
+                    console.log(`  IsTruncated: ${isTruncated}`);
+
+                    const nextContinuationTokenNode = xmlDoc.querySelector('NextContinuationToken');
+                    continuationToken = nextContinuationTokenNode ? nextContinuationTokenNode.textContent : undefined;
+                    console.log(`  NextContinuationToken: ${continuationToken || 'N/A'}`);
+                }
+                console.log(`Finished listing for prefix ${s3KeyPrefix}. Total keys found: ${allKeys.length}`);
+                return allKeys;
+            } catch (error) {
+                console.error(`Network or parsing error during S3 listing for prefix ${s3KeyPrefix}:`, error);
+                showMessage(`Network/Parsing Error during S3 listing: ${error.message || error}`, 'error');
+                return [];
+            }
+        }
+
+        // --- Main Logic for Finding and Downloading Files ---
+
+        findFilesBtn.addEventListener('click', async () => {
+            console.log("--- Find Available Files button clicked ---");
+            const selectedProductType = productSelect.value;
+            const obsDate = obsDateInput.value;
+            const startHour = startHourSelect.value;
+            const startMinute = startMinuteSelect.value;
+            const timeDeltaMinutes = parseInt(timeDeltaSlider.value, 10);
+
+            console.log(`Selections: Satellite=${satelliteSelect.value}, Product=${selectedProductType}, Date=${obsDate}, Hour=${startHour}, Minute=${startMinute}, TimeDelta=${timeDeltaMinutes} min.`);
+
+            // Clear previous results and messages
+            fileListContainer.innerHTML = '';
+            downloadSelectedBtn.disabled = true;
+            openMyHDF5Btn.disabled = true;
+            selectAllBtn.disabled = true;
+            clearSelectionBtn.disabled = true;
+            jsonOutputPanel.classList.add('hidden'); // Hide JSON panel
+            jsonDisplayArea.value = ''; // Clear JSON display
+            foundFilesArea.classList.add('hidden');
+            showMessage('', 'info'); // Clear any previous message
+
+            if (!selectedProductType || !obsDate || !startHour || !startMinute) {
+                console.error("Missing required selections.");
+                showMessage("Please select a Satellite, Product Type, Date, Start Hour, and Start Minute.", "error");
+                return;
+            }
+
+            showMessage("Searching for available files...", "info");
+            findFilesBtn.disabled = true; // Disable button during search
+
+            const template = productTemplates[selectedProductType];
+            const selectedDateObj = new Date(obsDate);
+            // Use UTC to avoid timezone issues when constructing the reference time for filtering
+            selectedDateObj.setUTCHours(parseInt(startHour, 10), parseInt(startMinute, 10), 0, 0); 
+            console.log(`Selected DateTime (UTC for reference): ${selectedDateObj.toISOString()}`);
+
+            const queryWindowStart = new Date(selectedDateObj.getTime() - timeDeltaMinutes * 60 * 1000);
+            const queryWindowEnd = new Date(selectedDateObj.getTime() + timeDeltaMinutes * 60 * 1000);
+            console.log(`Query Window (UTC): Start=${queryWindowStart.toISOString()}, End=${queryWindowEnd.toISOString()}`);
+
+            let allKeys = [];
+            const queriedPrefixes = new Set(); // To avoid duplicate S3 API calls
+
+            // Determine the range of 10-minute intervals to query S3 prefixes
+            // Iterate from the earliest possible 10-min interval that could contain data
+            // within queryWindowStart, to the latest possible 10-min interval for queryWindowEnd.
+            const iterationStart = new Date(queryWindowStart);
+            iterationStart.setUTCHours(iterationStart.getUTCHours(), Math.floor(iterationStart.getUTCMinutes() / 10) * 10, 0, 0);
+
+            const iterationEnd = new Date(queryWindowEnd);
+            iterationEnd.setUTCHours(iterationEnd.getUTCHours(), Math.ceil(iterationEnd.getUTCMinutes() / 10) * 10, 0, 0);
+
+            let currentIterationTime = new Date(iterationStart);
+            console.log(`Iterating S3 prefixes from ${iterationStart.toISOString()} to ${iterationEnd.toISOString()} in 10-min steps.`);
+            while (currentIterationTime.getTime() <= iterationEnd.getTime()) {
+                const yyyy = currentIterationTime.getUTCFullYear().toString();
+                const mm = pad(currentIterationTime.getUTCMonth() + 1, 2);
+                const dd = pad(currentIterationTime.getUTCDate(), 2);
+                const hhmm = pad(currentIterationTime.getUTCHours(), 2) + pad(currentIterationTime.getUTCMinutes(), 2);
+
+                // Construct the S3 listing prefix for this 10-minute interval and product type
+                // Format: {category}/YYYY/MM/DD/hhmm/SHORT_PRODUCT_CODE
+                const s3KeyPrefix = `${template.category}/${yyyy}/${mm}/${dd}/${hhmm}/${template.listingPartialPrefix}`;
+                console.log(`  Considering S3 prefix: ${s3KeyPrefix}`);
+
+                if (!queriedPrefixes.has(s3KeyPrefix)) {
+                    queriedPrefixes.add(s3KeyPrefix);
+                    const keysForPrefix = await listObjectsAtPrefix(s3KeyPrefix);
+                    allKeys.push(...keysForPrefix);
+                }
+
+                // Move to the next 10-minute interval
+                currentIterationTime = new Date(currentIterationTime.getTime() + 10 * 60 * 1000);
+            }
+            console.log(`Initial raw keys found from all S3 prefix queries: ${allKeys.length}`);
+
+            // Remove duplicate keys and filter based on actual timestamp in filename
+            const uniqueFilteredKeys = Array.from(new Set(allKeys)).filter(key => {
+                const filenameWithoutPath = key.split('/').pop();
+                
+                // 1. Basic check if filename contains the product's base identifier AND the correct satellite code
+                // e.g., AHI-CMSK_v1r1_h09, AHI-CMSK_v1r1_h08
+                if (!filenameWithoutPath.includes(template.baseFilenameIdentifier + currentSatelliteCode)) {
+                     // console.log(`Key "${key}" rejected: Does not contain baseFilenameIdentifier "${template.baseFilenameIdentifier + currentSatelliteCode}"`);
+                    return false;
+                }
+
+                // 2. Extract and parse the 's' (start) timestamp from the filename
+                const match = filenameWithoutPath.match(template.timestampRegex);
+                if (match && match[1]) {
+                    const fileObsStartTime = parseHimawariTimestamp(match[1]);
+                    // 3. Check if file's observation start time is within the query window
+                    const isWithinWindow = fileObsStartTime && fileObsStartTime.getTime() >= queryWindowStart.getTime() && fileObsStartTime.getTime() <= queryWindowEnd.getTime();
+                    // if (!isWithinWindow) {
+                    //     console.log(`Key "${key}" rejected: Start time ${fileObsStartTime ? fileObsStartTime.toISOString() : 'N/A'} is outside window.`);
+                    // }
+                    return isWithinWindow;
+                }
+                // console.log(`Key "${key}" rejected: Could not parse timestamp from filename.`);
+                return false; // Filter out keys where time parsing failed
+            });
+            console.log(`Final unique and time-filtered keys: ${uniqueFilteredKeys.length} keys.`);
+
+            if (uniqueFilteredKeys.length > 0) {
+                uniqueFilteredKeys.sort(); // Sort keys for consistent display
+                console.log("Displaying filtered keys.");
+                fileListContainer.innerHTML = uniqueFilteredKeys.map((key, index) => {
+                    const filename = key.split('/').pop(); // Extract just the filename
+                    return `
+                        <div class="flex items-center">
+                            <input type="checkbox" id="file-${index}" value="${key}" class="file-checkbox mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 rounded border-gray-300">
+                            <label for="file-${index}" class="text-gray-700 text-sm break-all">${filename}</label>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Add listener to checkboxes for enabling/disabling buttons
+                fileListContainer.querySelectorAll('.file-checkbox').forEach(checkbox => {
+                    checkbox.addEventListener('change', updateButtonStates);
+                });
+
+                downloadSelectedBtn.disabled = false;
+                openMyHDF5Btn.disabled = false;
+                selectAllBtn.disabled = false;
+                clearSelectionBtn.disabled = false;
+                foundFilesArea.classList.remove('hidden');
+                showMessage(`Found ${uniqueFilteredKeys.length} matching files. Select to download or view.`, "success");
+            } else {
+                console.log("No files found after filtering.");
+                fileListContainer.innerHTML = '<p class="text-gray-500 text-sm">No files found for selected criteria within the time window. Try a different date/time or expand the time window.</p>';
+                foundFilesArea.classList.remove('hidden');
+                showMessage("No files found.", "info");
+            }
+            findFilesBtn.disabled = false; // Re-enable button
+            updateButtonStates(); // Call to update JSON panel visibility and content
+            console.log("--- Find Available Files process completed ---");
+        });
+
+        /**
+         * Generates the JSON string for selected files.
+         * @param {Array<string>} selectedKeys An array of full S3 object keys.
+         * @returns {string} The JSON string.
+         */
+        function generateJsonForSelectedFiles(selectedKeys) {
+            const jsonObject = {
+                http_prefix: currentS3BaseUrl,
+                s3_bucket: currentS3BucketName,
+                keys: selectedKeys
+            };
+            return JSON.stringify(jsonObject, null, 2); // Pretty print
+        }
+
+        // Function to update the disabled state of download/view/copy buttons and JSON panel
+        function updateButtonStates() {
+            const selectedCheckboxes = fileListContainer.querySelectorAll('input[type="checkbox"]:checked');
+            const allCheckboxes = fileListContainer.querySelectorAll('input[type="checkbox"]');
+            const numSelected = selectedCheckboxes.length;
+            const totalFiles = allCheckboxes.length;
+
+            console.log(`Selected ${numSelected} checkboxes out of ${totalFiles}.`);
+
+            downloadSelectedBtn.disabled = numSelected === 0;
+            openMyHDF5Btn.disabled = numSelected !== 1; // Only enable if exactly one file selected
+
+            selectAllBtn.disabled = totalFiles === 0 || numSelected === totalFiles;
+            clearSelectionBtn.disabled = numSelected === 0;
+
+            // Handle JSON output panel visibility and content
+            if (numSelected > 0) {
+                jsonOutputPanel.classList.remove('hidden');
+                const selectedKeys = Array.from(selectedCheckboxes).map(checkbox => checkbox.value);
+                jsonDisplayArea.value = generateJsonForSelectedFiles(selectedKeys);
+                copyJsonFromPanelBtn.disabled = false;
+            } else {
+                jsonOutputPanel.classList.add('hidden');
+                jsonDisplayArea.value = '';
+                copyJsonFromPanelBtn.disabled = true;
+            }
+        }
+
+        // Event listener for "Select All" button
+        selectAllBtn.addEventListener('click', () => {
+            console.log("--- Select All button clicked ---");
+            fileListContainer.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = true;
+            });
+            updateButtonStates();
+            showMessage("All files selected.", "info");
+        });
+
+        // Event listener for "Clear Selection" button
+        clearSelectionBtn.addEventListener('click', () => {
+            console.log("--- Clear Selection button clicked ---");
+            fileListContainer.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            updateButtonStates();
+            showMessage("Selection cleared.", "info");
+        });
+
+
+        // Event listener for "Download Selected Files" button
+        downloadSelectedBtn.addEventListener('click', () => {
+            console.log("--- Download Selected Files button clicked ---");
+            const checkboxes = fileListContainer.querySelectorAll('input[type="checkbox"]:checked');
+            if (checkboxes.length === 0) {
+                console.warn("No files selected for download.");
+                showMessage("Please select at least one file to download.", "info");
+                return;
+            }
+
+            showMessage(`Initiating download for ${checkboxes.length} file(s)... Please check your browser's download bar.`, "info");
+            downloadSelectedBtn.disabled = true; // Disable button during download
+
+            let downloadCount = 0;
+            checkboxes.forEach((checkbox, index) => {
+                // checkbox.value already contains the full S3 key (e.g., AHI-L2-FLDK-Clouds/...)
+                const s3Key = checkbox.value;
+                const downloadUrl = `${currentS3BaseUrl}/${s3Key}`; // Prepend current S3_BASE_URL to the key for download
+                const filename = checkbox.labels[0].textContent; // Get the filename from the label
+                console.log(`  Preparing download for file ${index + 1}: ${filename} from ${downloadUrl}`);
+
+                // Use a small delay for multiple downloads to prevent browser blocking
+                setTimeout(() => {
+                    const a = document.createElement('a');
+                    a.style.display = 'none'; // Keep it hidden
+                    a.href = downloadUrl;
+                    a.download = filename; // Suggests a filename for the download
+                    document.body.appendChild(a);
+                    a.click(); // Programmatically click the link
+                    document.body.removeChild(a); // Clean up the element
+
+                    downloadCount++;
+                    console.log(`  Download initiated for ${filename}. Total initiated: ${downloadCount}`);
+                    if (downloadCount === checkboxes.length) {
+                        showMessage("All selected files initiated for download.", "success");
+                        downloadSelectedBtn.disabled = false; // Re-enable after all downloads initiated
+                        console.log("--- All downloads initiated. ---");
+                    }
+                }, index * 100); // 100ms delay per file
+            });
+        });
+
+        // Event listener for the "Open in myhdf5.hdfgroup.org" button
+        openMyHDF5Btn.addEventListener('click', () => {
+            console.log("--- Open in myhdf5.hdfgroup.org button clicked ---");
+            const selectedCheckboxes = fileListContainer.querySelectorAll('input[type="checkbox"]:checked');
+            if (selectedCheckboxes.length !== 1) {
+                console.warn("MyHDF5: Exactly one file must be selected.");
+                showMessage("Please select exactly ONE file to open in myhdf5.hdfgroup.org.", "error");
+                return;
+            }
+
+            showMessage("Opening file in myhdf5.hdfgroup.org... This may take a moment as files can be large.", "info");
+            openMyHDF5Btn.disabled = true; // Disable temporarily
+
+            const checkbox = selectedCheckboxes[0];
+            const s3Key = checkbox.value; // The checkbox value already holds the full S3 key
+            
+            // Construct the full S3 file URL, including the current base URL
+            const fileUrl = `${currentS3BaseUrl}/${s3Key}`;
+            console.log(`MyHDF5: Preparing to open ${fileUrl}`);
+
+            // URL-encode the S3 file URL for the URL parameter
+            const encodedFileUrl = encodeURIComponent(fileUrl);
+            const myHDF5DirectViewUrl = `https://myhdf5.hdfgroup.org/view?url=${encodedFileUrl}`;
+            console.log(`MyHDF5: Opening URL: ${myHDF5DirectViewUrl}`);
+            
+            // Open myhdf5.hdfgroup.org in a new tab with the direct view URL
+            window.open(myHDF5DirectViewUrl, '_blank');
+            
+            showMessage("File opened in a new tab.", "success");
+            openMyHDF5Btn.disabled = false; // Re-enable button
+            console.log("--- MyHDF5 process completed ---");
+        });
+
+        // Event listener for the new "Copy JSON to Clipboard" button
+        copyJsonFromPanelBtn.addEventListener('click', async () => {
+            console.log("--- Copy JSON from Panel button clicked ---");
+            const jsonText = jsonDisplayArea.value;
+
+            if (!jsonText) {
+                console.warn("JSON display area is empty. Nothing to copy.");
+                showMessage("No JSON to copy. Select files first.", "info");
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(jsonText);
+                showMessage('JSON copied to clipboard!', 'success');
+                console.log('JSON from panel copied successfully.');
+            } catch (err) {
+                console.error('Failed to copy JSON to clipboard: ', err);
+                showMessage('Failed to copy JSON. Your browser might not support clipboard API.', 'error');
+            }
+        });
+
+    </script>
+</body>
+</html>
